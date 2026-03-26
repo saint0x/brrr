@@ -75,9 +75,10 @@ brrr raw "Hello world! 🚀"
 
 | Variable | Description |
 |----------|-------------|
+| `BRRR_API_KEY` | Your brrr API key (loaded from `.env`) |
 | `BRRR_DIR` | Directory containing `.env` (default: script location) |
-| `BRRR_API_URL` | API endpoint (loaded from `.env`) |
-| `BRRR_API_KEY` | API key (loaded from `.env`) |
+
+The API base URL (`https://api.brrr.now/v1`) is hardcoded — only the key comes from `.env`.
 
 ## License
 

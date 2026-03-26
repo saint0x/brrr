@@ -7,6 +7,8 @@ set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
+BRRR_BASE_URL="https://api.brrr.now/v1"
+
 BRRR_DIR="${BRRR_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 BRRR_ENV="${BRRR_DIR}/.env"
 
@@ -14,10 +16,12 @@ if [[ -f "$BRRR_ENV" ]]; then
     source "$BRRR_ENV"
 fi
 
-if [[ -z "${BRRR_API_URL:-}" ]]; then
-    echo "brrr: missing BRRR_API_URL — set it in ${BRRR_ENV} or export it" >&2
+if [[ -z "${BRRR_API_KEY:-}" ]]; then
+    echo "brrr: missing BRRR_API_KEY — set it in ${BRRR_ENV} or export it" >&2
     exit 1
 fi
+
+BRRR_API_URL="${BRRR_BASE_URL}/${BRRR_API_KEY}"
 
 # ── Urgency definitions ────────────────────────────────────────────────────
 
@@ -296,6 +300,10 @@ EXAMPLES:
   brrr send -u critical -r "outage" -m "DB pool exhausted"
   echo "backup done" | brrr pipe bg
   brrr raw "Hello world! 🚀"
+
+CONFIG:
+  API base URL is hardcoded (https://api.brrr.now/v1).
+  Only BRRR_API_KEY is needed in .env — no URL config required.
 HELP
 }
 
