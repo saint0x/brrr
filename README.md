@@ -15,11 +15,8 @@ cd brrr
 cp .env.example .env
 # Edit .env with your brrr API key and URL
 
-# 3. Add to PATH
-export PATH="$PATH:$(pwd)"
-
-# Or add permanently to your shell profile:
-echo 'export PATH="$PATH:/path/to/brrr"' >> ~/.zshrc
+# 3. Install to your shell
+brrr install --zsh      # or --bash or --fish
 ```
 
 ## Usage

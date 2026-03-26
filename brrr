@@ -283,6 +283,11 @@ FULL CONTROL:
     -m, --message   What the user needs to know
     -s, --source    What's sending this (default: terminal)
 
+SETUP:
+  brrr install --zsh          Add brrr to ~/.zshrc
+  brrr install --bash         Add brrr to ~/.bashrc
+  brrr install --fish         Add brrr to fish config
+
 EXAMPLES:
   brrr urgent "deploy" "prod is returning 500s on /api/auth"
   brrr low "reminder" "PR #31 is ready for your review"
@@ -292,6 +297,52 @@ EXAMPLES:
   echo "backup done" | brrr pipe bg
   brrr raw "Hello world! 🚀"
 HELP
+}
+
+# ── Install ────────────────────────────────────────────────────────────────
+
+cmd_install() {
+    local shell_flag="${1:-}"
+    local brrr_dir
+    brrr_dir="$(cd "$(dirname "$0")" && pwd)"
+    local path_line="export PATH=\"\$PATH:${brrr_dir}\""
+
+    local rc_file=""
+    local shell_name=""
+
+    case "$shell_flag" in
+        --zsh)
+            rc_file="$HOME/.zshrc"
+            shell_name="zsh"
+            ;;
+        --bash)
+            rc_file="$HOME/.bashrc"
+            shell_name="bash"
+            ;;
+        --fish)
+            rc_file="${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish"
+            shell_name="fish"
+            path_line="fish_add_path ${brrr_dir}"
+            ;;
+        *)
+            echo "usage: brrr install --zsh | --bash | --fish" >&2
+            return 1
+            ;;
+    esac
+
+    if [[ ! -f "$rc_file" ]]; then
+        echo "brrr: ${rc_file} not found — creating it" >&2
+        touch "$rc_file"
+    fi
+
+    if grep -qF "$brrr_dir" "$rc_file" 2>/dev/null; then
+        echo "brrr: already in ${rc_file} — nothing to do"
+        return 0
+    fi
+
+    printf '\n# brrr — agent-to-user notifications\n%s\n' "$path_line" >> "$rc_file"
+    echo "brrr: added to ${rc_file}"
+    echo "brrr: run 'source ${rc_file}' or open a new terminal to use it"
 }
 
 # ── Dispatch ───────────────────────────────────────────────────────────────
@@ -320,6 +371,7 @@ main() {
         send)      cmd_send "$@" ;;
         pipe)      cmd_pipe "$@" ;;
         test)      cmd_test "$@" ;;
+        install)   cmd_install "$@" ;;
         help|-h|--help)  cmd_help ;;
         *)
             # If no subcommand matches, treat as a quick normal-urgency message
