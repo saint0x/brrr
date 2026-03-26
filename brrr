@@ -1,0 +1,331 @@
+#!/usr/bin/env zsh
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# brrr — instant phone notifications from your terminal
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+set -euo pipefail
+
+# ── Config ──────────────────────────────────────────────────────────────────
+
+BRRR_DIR="${BRRR_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+BRRR_ENV="${BRRR_DIR}/.env"
+
+if [[ -f "$BRRR_ENV" ]]; then
+    source "$BRRR_ENV"
+fi
+
+if [[ -z "${BRRR_API_URL:-}" ]]; then
+    echo "brrr: missing BRRR_API_URL — set it in ${BRRR_ENV} or export it" >&2
+    exit 1
+fi
+
+# ── Urgency definitions ────────────────────────────────────────────────────
+
+typeset -A URGENCY_LABEL URGENCY_ICON
+URGENCY_LABEL=(
+    [critical]="CRITICAL"
+    [urgent]="URGENT"
+    [alert]="ALERT"
+    [high]="HIGH"
+    [normal]="NORMAL"
+    [info]="INFO"
+    [low]="LOW"
+    [bg]="BACKGROUND"
+    [fyi]="FYI"
+)
+URGENCY_ICON=(
+    [critical]="🚨"
+    [urgent]="🔴"
+    [alert]="🟠"
+    [high]="🟡"
+    [normal]="🔵"
+    [info]="💬"
+    [low]="🟢"
+    [bg]="⚪"
+    [fyi]="📎"
+)
+
+# ── Core send function ─────────────────────────────────────────────────────
+
+_brrr_send() {
+    local body="$1"
+
+    local response
+    local http_code
+
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X POST "$BRRR_API_URL" \
+        -d "$body" 2>&1) || {
+        echo "brrr: network error — could not reach API" >&2
+        return 1
+    }
+
+    if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+        echo "brrr: sent ✓"
+        return 0
+    else
+        echo "brrr: API returned HTTP ${http_code}" >&2
+        return 1
+    fi
+}
+
+# ── Message formatter ──────────────────────────────────────────────────────
+
+_brrr_format() {
+    local urgency="${1:-normal}"
+    local reason="${2:-}"
+    local message="${3:-}"
+    local source="${4:-terminal}"
+
+    local icon="${URGENCY_ICON[$urgency]:-🔵}"
+    local label="${URGENCY_LABEL[$urgency]:-NORMAL}"
+    local timestamp
+    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+
+    local body=""
+    body+="${icon} ${label}"
+
+    if [[ -n "$reason" ]]; then
+        body+=" — ${reason}"
+    fi
+
+    body+=$'\n'
+
+    if [[ -n "$message" ]]; then
+        body+="${message}"$'\n'
+    fi
+
+    body+="┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"$'\n'
+    body+="⏱ ${timestamp} · 📍 ${source}"
+
+    echo "$body"
+}
+
+# ── Subcommands ────────────────────────────────────────────────────────────
+
+cmd_send() {
+    local urgency="normal"
+    local reason=""
+    local message=""
+    local source="terminal"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -u|--urgency)  urgency="$2";  shift 2 ;;
+            -r|--reason)   reason="$2";   shift 2 ;;
+            -m|--message)  message="$2";  shift 2 ;;
+            -s|--source)   source="$2";   shift 2 ;;
+            *)
+                if [[ -z "$message" ]]; then
+                    message="$1"
+                else
+                    message+=" $1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$message" && -z "$reason" ]]; then
+        echo "brrr send: need at least a message or reason" >&2
+        echo "usage: brrr send [-u urgency] [-r reason] [-m message]" >&2
+        return 1
+    fi
+
+    local body
+    body="$(_brrr_format "$urgency" "$reason" "$message" "$source")"
+    _brrr_send "$body"
+}
+
+cmd_critical() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "critical" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_urgent() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "urgent" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_alert() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "alert" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_high() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "high" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_info() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "info" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_low() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "low" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_bg() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "bg" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_fyi() {
+    local reason="" message=""
+    if [[ $# -ge 2 ]]; then reason="$1"; shift; fi
+    message="$*"
+    local body
+    body="$(_brrr_format "fyi" "$reason" "$message" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_ping() {
+    local msg="${1:-👋 ping}"
+    local body
+    body="$(_brrr_format "info" "" "$msg" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_raw() {
+    if [[ $# -eq 0 ]]; then
+        echo "brrr raw: need a message" >&2
+        return 1
+    fi
+    _brrr_send "$*"
+}
+
+cmd_pipe() {
+    local urgency="${1:-normal}"
+    local input
+    input="$(cat)"
+    if [[ -z "$input" ]]; then
+        echo "brrr pipe: empty stdin" >&2
+        return 1
+    fi
+    local body
+    body="$(_brrr_format "$urgency" "piped output" "$input" "terminal")"
+    _brrr_send "$body"
+}
+
+cmd_test() {
+    echo "brrr: sending test notification..."
+    local body
+    body="$(_brrr_format "info" "test" "If you see this, brrr is working." "terminal")"
+    _brrr_send "$body"
+}
+
+# ── Help ───────────────────────────────────────────────────────────────────
+
+cmd_help() {
+    cat <<'HELP'
+brrr — send a notification directly to the user's phone
+
+This is how you contact the user. Use brrr to send a message that
+arrives on their phone instantly. Choose the urgency level that fits
+the situation, include a reason so they know why they're being
+contacted, and send it. One command, straight to their pocket.
+
+URGENCY LEVELS:
+  brrr critical [reason] <message>   🚨 Something is broken — user must act now
+  brrr urgent   [reason] <message>   🔴 User's attention needed immediately
+  brrr alert    [reason] <message>   🟠 Important — user should act soon
+  brrr high     [reason] <message>   🟡 Elevated priority for the user
+  brrr info     [reason] <message>   💬 Keeping the user informed
+  brrr low      [reason] <message>   🟢 Non-urgent — user can check later
+  brrr bg       [reason] <message>   ⚪ Background context, no action needed
+  brrr fyi      [reason] <message>   📎 For the user's awareness
+
+  The [reason] is optional — it tells the user why they're being contacted.
+  If you only pass one argument, it's treated as the message.
+
+QUICK ACTIONS:
+  brrr ping [message]       Quick nudge to the user (default: 👋 ping)
+  brrr raw  <message>       Send raw unformatted text to the user
+  brrr test                 Confirm the connection to the user works
+  brrr pipe [urgency]       Pipe stdout and send it to the user
+  brrr help                 Show this reference
+
+FULL CONTROL:
+  brrr send -u <urgency> -r <reason> -m <message> [-s <source>]
+
+    -u, --urgency   critical|urgent|alert|high|normal|info|low|bg|fyi
+    -r, --reason    Why the user is being contacted (e.g. "deploy", "outage")
+    -m, --message   What the user needs to know
+    -s, --source    What's sending this (default: terminal)
+
+EXAMPLES:
+  brrr urgent "deploy" "prod is returning 500s on /api/auth"
+  brrr low "reminder" "PR #31 is ready for your review"
+  brrr info "Build passed — all 127 tests green"
+  brrr ping
+  brrr send -u critical -r "outage" -m "DB pool exhausted"
+  echo "backup done" | brrr pipe bg
+  brrr raw "Hello world! 🚀"
+HELP
+}
+
+# ── Dispatch ───────────────────────────────────────────────────────────────
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        cmd_help
+        return 0
+    fi
+
+    local subcmd="$1"
+    shift
+
+    case "$subcmd" in
+        critical)  cmd_critical "$@" ;;
+        urgent)    cmd_urgent "$@" ;;
+        alert)     cmd_alert "$@" ;;
+        high)      cmd_high "$@" ;;
+        info)      cmd_info "$@" ;;
+        normal)    cmd_send -u normal "$@" ;;
+        low)       cmd_low "$@" ;;
+        bg)        cmd_bg "$@" ;;
+        fyi)       cmd_fyi "$@" ;;
+        ping)      cmd_ping "$@" ;;
+        raw)       cmd_raw "$@" ;;
+        send)      cmd_send "$@" ;;
+        pipe)      cmd_pipe "$@" ;;
+        test)      cmd_test "$@" ;;
+        help|-h|--help)  cmd_help ;;
+        *)
+            # If no subcommand matches, treat as a quick normal-urgency message
+            cmd_send -u normal -m "${subcmd} $*"
+            ;;
+    esac
+}
+
+main "$@"
